@@ -7,11 +7,10 @@
 #include <arpa/inet.h>
 
 lock_server::lock_server():
-  nacquire (0),
-  lock(false)
+  nacquire (0)
 {
-	pthread_mutex_init(&lock_mutex, NULL);
-	pthread_cond_init(&lock_available, NULL);
+	pthread_mutex_init(&locks_mutex, NULL);
+	pthread_cond_init(&locks_available, NULL);
 }
 
 lock_protocol::status
@@ -26,24 +25,27 @@ lock_server::stat(int clt, lock_protocol::lockid_t lid, int &r)
 lock_protocol::status
 lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
-	pthread_mutex_lock(&lock_mutex);
-	while (lock) {
-		pthread_cond_wait(&lock_available, &lock_mutex);
+	pthread_mutex_lock(&locks_mutex);
+	if (locks.find(lid) == locks.end()) {
+		locks[lid] = false;
 	}
-	lock = true;
-	printf("clt %d locked\n", clt);
-	pthread_mutex_unlock(&lock_mutex);
+	while (locks[lid]) {
+		pthread_cond_wait(&locks_available, &locks_mutex);
+	}
+	locks[lid] = true;
+	//printf("clt %d acquires lock %lld\n", clt, lid);
+	pthread_mutex_unlock(&locks_mutex);
 	return lock_protocol::OK;
 }
 
 lock_protocol::status
 lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
-	pthread_mutex_lock(&lock_mutex);
-	lock = false;
-	printf("clt %d unlocked\n", clt);
-	pthread_cond_signal(&lock_available);
-	pthread_mutex_unlock(&lock_mutex);
+	pthread_mutex_lock(&locks_mutex);
+	locks[lid] = false;
+	//printf("clt %d releases lock %lld\n", clt, lid);
+	pthread_cond_signal(&locks_available);
+	pthread_mutex_unlock(&locks_mutex);
 	return lock_protocol::OK;
 }
 
