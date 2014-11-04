@@ -561,7 +561,17 @@ void
 rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 		char *b, int sz)
 {
+	std::list<reply_t>::iterator it;
+
 	ScopedLock rwl(&reply_window_m_);
+	for (it = reply_window_[clt_nonce].begin(); it != reply_window_[clt_nonce].end(); it++) {
+		if (it->xid == xid) {
+			it->buf = b;
+			it->sz = sz;
+			it->cb_present = true;
+			break;
+		}
+	}
 }
 
 void
@@ -584,8 +594,35 @@ rpcs::rpcstate_t
 rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		unsigned int xid_rep, char **b, int *sz)
 {
-	ScopedLock rwl(&reply_window_m_);
+	std::list<reply_t>::iterator it;
 
+	ScopedLock rwl(&reply_window_m_);
+	if (!reply_window_[clt_nonce].empty()) {
+		if (xid < reply_window_[clt_nonce].front().xid) {
+			return FORGOTTEN;
+		}
+		it = reply_window_[clt_nonce].begin();
+		while (it != reply_window_[clt_nonce].end()) {
+			if (it->xid == xid){
+				if (it->cb_present) {
+					*sz = it->sz;
+					*b = it->buf;
+					return DONE;
+				}
+				else {
+					return INPROGRESS;
+				}
+			}
+			if (it->xid <= xid_rep) {
+				it = reply_window_[clt_nonce].erase(it);
+			}
+			else {
+				it++;
+			}
+		}
+	}
+	reply_t reply(xid);
+	reply_window_[clt_nonce].push_back(reply);
 	return NEW;
 }
 
