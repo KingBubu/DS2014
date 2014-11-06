@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <list>
 #include <map>
+#include <unistd.h>
 
 #include "thr_pool.h"
 #include "marshall.h"
