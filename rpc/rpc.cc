@@ -595,25 +595,24 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		unsigned int xid_rep, char **b, int *sz)
 {
 	std::list<reply_t>::iterator it;
+	rpcs::rpcstate_t  state = NEW;
 
 	ScopedLock rwl(&reply_window_m_);
 	if (!reply_window_[clt_nonce].empty()) {
-		if (xid < reply_window_[clt_nonce].front().xid) {
-			return FORGOTTEN;
-		}
 		it = reply_window_[clt_nonce].begin();
 		while (it != reply_window_[clt_nonce].end()) {
 			if (it->xid == xid){
 				if (it->cb_present) {
 					*sz = it->sz;
 					*b = it->buf;
-					return DONE;
+					state = DONE;
 				}
 				else {
-					return INPROGRESS;
+					state = INPROGRESS;
 				}
 			}
 			if (it->xid <= xid_rep) {
+				free((*it).buf);
 				it = reply_window_[clt_nonce].erase(it);
 			}
 			else {
@@ -621,9 +620,14 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 			}
 		}
 	}
-	reply_t reply(xid);
-	reply_window_[clt_nonce].push_back(reply);
-	return NEW;
+	if (xid <= xid_rep) {
+		state = FORGOTTEN;
+	}
+	else {
+		reply_t reply(xid);
+		reply_window_[clt_nonce].push_back(reply);
+	}
+	return state;
 }
 
 //rpc handler
