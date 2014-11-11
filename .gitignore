@@ -28,3 +28,7 @@
 *.out
 *.app
 
+# My Project files
+.cproject
+.project
+
